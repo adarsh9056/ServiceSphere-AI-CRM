@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  SALESPERSON
+  MANAGER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+enum DealStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum AutomationExecutionStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+  RETRYING
+}
+
+model User {
+  id               String      @id @default(cuid())
+  name             String
+  email            String      @unique
+  password         String
+  role             UserRole    @default(SALESPERSON)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  leads            Lead[]      @relation("AssignedLeads")
+  deals            Deal[]      @relation("OwnedDeals")
+  activities       Activity[]
+  dashboards       Dashboard[]
+  accountsOwned    Account[]   @relation("AccountOwner")
+  tasksAssigned    Task[]      @relation("TaskAssignee")
+  tasksCreated     Task[]      @relation("TaskCreator")
+  notesAuthored    Note[]
+  attachments      Attachment[]
+  dealStageChanges DealStageHistory[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model Account {
+  id         String    @id @default(cuid())
+  name       String
+  website    String?
+  industry   String?
+  phone      String?
+  ownerId    String?
+  owner      User?     @relation("AccountOwner", fields: [ownerId], references: [id])
+  leads      Lead[]
+  contacts   Contact[]
+  notes      Note[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Lead {
+  id               String             @id @default(cuid())
+  name             String
+  company          String?
+  email            String?
+  phone            String?
+  status           LeadStatus         @default(NEW)
+  source           String?
+  score            Int                @default(50)
+  sentiment        Sentiment?
+  openedEmail      Boolean            @default(false)
+  repliedEmail     Boolean            @default(false)
+  companySize      Int?
+  assignedToId     String?
+  assignedTo       User?              @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  notes            String?
+  accountId        String?
+  account          Account?           @relation(fields: [accountId], references: [id])
+  deals            Deal[]
+  activities       Activity[]
+  emails           Email[]
+  whatsappMessages WhatsappMessage[]
+  contacts         Contact[]
+  tasks            Task[]
+  leadNotes        Note[]             @relation("LeadNotes")
+  attachments      Attachment[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  accountId  String?
+  account    Account? @relation(fields: [accountId], references: [id])
+  leadId     String?
+  lead       Lead?    @relation(fields: [leadId], references: [id])
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  title      String?
+  isPrimary  Boolean  @default(false)
+  notes      Note[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Deal {
+  id                 String             @id @default(cuid())
+  leadId             String
+  lead               Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  stage              DealStage          @default(NEW)
+  value              Decimal?           @db.Decimal(12, 2)
+  expectedCloseDate  DateTime?
+  ownerId            String?
+  owner              User?              @relation("OwnedDeals", fields: [ownerId], references: [id])
+  lastStageChangeAt  DateTime           @default(now())
+  tasks              Task[]
+  dealNotes          Note[]             @relation("DealNotes")
+  stageHistory       DealStageHistory[]
+  attachments        Attachment[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model DealStageHistory {
+  id String @id @default(cuid())
+
+  dealId String
+  deal   Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  fromStage DealStage?
+  toStage   DealStage
+
+  changedById String?
+  changedBy   User?   @relation(fields: [changedById], references: [id])
+
+  reason String?
+
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id String @id @default(cuid())
+
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      TaskStatus   @default(OPEN)
+  priority    TaskPriority @default(NORMAL)
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation("TaskCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Note {
+  id String @id @default(cuid())
+
+  body String
+
+  leadId String?
+  lead   Lead?   @relation("LeadNotes", fields: [leadId], references: [id])
+
+  dealId String?
+  deal   Deal?   @relation("DealNotes", fields: [dealId], references: [id])
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  attachments Attachment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Attachment {
+  id String @id @default(cuid())
+
+  fileName   String
+  mimeType   String
+  storageKey String
+  sizeBytes  Int
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id])
+
+  noteId String?
+  note   Note?   @relation(fields: [noteId], references: [id])
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  type        String
+  description String
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id])
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Email {
+  id        String   @id @default(cuid())
+  direction String
+  subject   String?
+  body      String?
+  messageId String?
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+
+  fromAddress String?
+  toAddress   String?
+  inReplyTo   String?
+  threadKey   String?
+  ccAddresses String?
+
+  imapUid  Int?
+  mailbox  String?
+  syncedAt DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model WhatsappMessage {
+  id        String   @id @default(cuid())
+  body      String
+  direction String
+  phone     String
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Dashboard {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  trigger     String
+  action      String
+  config      Json?
+  enabled     Boolean  @default(true)
+  executions  AutomationExecution[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AutomationExecution {
+  id String @id @default(cuid())
+
+  ruleId String?
+  rule   AutomationRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  triggerKey String
+  status     AutomationExecutionStatus
+  attempts   Int       @default(1)
+  lastError  String?
+  payload    Json?
+  context    Json?
+
+  createdAt DateTime @default(now())
+}
+
+model RoundRobinState {
+  id String @id @default("global")
+
+  lastAssignedUserId String?
+  updatedAt          DateTime @updatedAt
+}
+
+model ImapSyncState {
+  id String @id @default("default")
+
+  lastUid   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}

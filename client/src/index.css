@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-surface: #f8fafc;
+  --color-surface-dark: #0f1419;
+  --color-panel: #ffffff;
+  --color-panel-dark: #1a1f26;
+  --color-border: #e2e8f0;
+  --color-border-dark: #2d3748;
+  --color-accent: #2563eb;
+  --color-accent-soft: #dbeafe;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* Dark mode via .dark on html (toggle in Settings) */
+html.dark {
+  color-scheme: dark;
+}

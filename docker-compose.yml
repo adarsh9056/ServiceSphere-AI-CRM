@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm123
+      POSTGRES_DB: crmdb
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://crm:crm123@postgres:5432/crmdb
+      JWT_SECRET: ${JWT_SECRET:-docker-dev-change-me}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
+      PORT: 4000
+    ports:
+      - '4000:4000'
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
