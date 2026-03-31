@@ -27,7 +27,59 @@ async function findLeadForAddress(prisma, address) {
 }
 
 /**
- * Fetch new messages since lastUid, parse, match to leads/contacts, persist Email rows.
+ * Persist one inbound message (used by IMAP sync and integration tests).
+ * Returns whether a new row was created (false if duplicate messageId).
+ */
+async function importInboundFromParsed(prisma, { parsed, uid, mailbox }) {
+  const from = parsed.from?.value?.[0]?.address || parsed.from?.text;
+  const subject = parsed.subject || '';
+  const text = parsed.text || parsed.html || '';
+  const messageId = parsed.messageId || null;
+  const inReplyTo = parsed.inReplyTo || null;
+
+  if (messageId) {
+    const existing = await prisma.email.findFirst({ where: { messageId } });
+    if (existing) {
+      return { imported: false, duplicate: true, leadId: existing.leadId };
+    }
+  }
+
+  const lead = await findLeadForAddress(prisma, from);
+  const threadKey =
+    inReplyTo ||
+    messageId ||
+    `thread-${subject.slice(0, 40)}-${normalizeAddr(from) || 'na'}`;
+
+  await prisma.email.create({
+    data: {
+      direction: 'INBOUND',
+      subject,
+      body: text.slice(0, 50000),
+      messageId: messageId || undefined,
+      inReplyTo: inReplyTo || undefined,
+      threadKey,
+      fromAddress: from || undefined,
+      toAddress: parsed.to?.text || undefined,
+      leadId: lead?.id,
+      imapUid: uid || undefined,
+      mailbox,
+      syncedAt: new Date(),
+    },
+  });
+
+  if (lead?.id) {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { repliedEmail: true },
+    });
+  }
+
+  return { imported: true, duplicate: false, leadId: lead?.id || null };
+}
+
+/**
+ * Incremental IMAP sync using UID range (not UNSEEN), so messages already read
+ * elsewhere still import. Batches with IMAP_SYNC_BATCH_SIZE to avoid huge catch-ups.
  */
 async function syncInboundEmails(prisma) {
   if (!process.env.IMAP_HOST || !process.env.IMAP_USER || !process.env.IMAP_PASS) {
@@ -37,6 +89,7 @@ async function syncInboundEmails(prisma) {
 
   const port = Number(process.env.IMAP_PORT || 993);
   const tls = process.env.IMAP_TLS !== 'false';
+  const batchSize = Math.max(1, Math.min(2000, Number(process.env.IMAP_SYNC_BATCH_SIZE || 200)));
 
   const config = {
     imap: {
@@ -65,77 +118,60 @@ async function syncInboundEmails(prisma) {
     update: {},
   });
 
+  const fetchFrom = Math.max(1, state.lastUid + 1);
+  const searchCriteria = [['UID', `${fetchFrom}:*`]];
+
   let messages = [];
   try {
-    messages = await connection.search(['UNSEEN'], {
+    messages = await connection.search(searchCriteria, {
       bodies: [''],
       struct: true,
     });
   } catch (err) {
-    log('error', 'imap_search_failed', { message: err.message });
+    log('error', 'imap_search_failed', { message: err.message, fetchFrom });
     await connection.end();
     return { skipped: true, imported: 0, error: err.message };
   }
 
-  let maxUid = state.lastUid;
+  messages.sort((a, b) => (a.attributes?.uid || 0) - (b.attributes?.uid || 0));
+  if (messages.length > batchSize) {
+    messages = messages.slice(0, batchSize);
+  }
+
+  if (messages.length === 0) {
+    try {
+      await connection.end();
+    } catch {
+      /* ignore */
+    }
+    log('info', 'imap_sync_complete', { imported: 0, lastUid: state.lastUid, fetchFrom, note: 'no_uids' });
+    return { skipped: false, imported: 0, lastUid: state.lastUid, fetchFrom };
+  }
+
+  let batchMaxUid = state.lastUid;
   let imported = 0;
 
   for (const item of messages) {
     const uid = item.attributes?.uid;
-    if (uid != null && uid > maxUid) maxUid = uid;
+    if (uid != null) batchMaxUid = Math.max(batchMaxUid, uid);
+
     const part = item.parts?.find((p) => p.which === '');
     if (!part?.body) continue;
+
     let parsed;
     try {
       parsed = await simpleParser(part.body);
     } catch {
       continue;
     }
-    const from = parsed.from?.value?.[0]?.address || parsed.from?.text;
-    const subject = parsed.subject || '';
-    const text = parsed.text || parsed.html || '';
-    const messageId = parsed.messageId || null;
-    const inReplyTo = parsed.inReplyTo || null;
 
-    const existing = messageId
-      ? await prisma.email.findFirst({ where: { messageId } })
-      : null;
-    if (existing) continue;
-
-    const lead = await findLeadForAddress(prisma, from);
-    const threadKey =
-      inReplyTo ||
-      messageId ||
-      `thread-${subject.slice(0, 40)}-${normalizeAddr(from) || 'na'}`;
-
-    await prisma.email.create({
-      data: {
-        direction: 'INBOUND',
-        subject,
-        body: text.slice(0, 50000),
-        messageId: messageId || undefined,
-        inReplyTo: inReplyTo || undefined,
-        threadKey,
-        fromAddress: from || undefined,
-        toAddress: parsed.to?.text || undefined,
-        leadId: lead?.id,
-        imapUid: uid || undefined,
-        mailbox,
-        syncedAt: new Date(),
-      },
-    });
-    if (lead?.id) {
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { repliedEmail: true },
-      });
-    }
-    imported += 1;
+    const result = await importInboundFromParsed(prisma, { parsed, uid, mailbox });
+    if (result.imported) imported += 1;
   }
 
   await prisma.imapSyncState.update({
     where: { id: 'default' },
-    data: { lastUid: maxUid },
+    data: { lastUid: batchMaxUid },
   });
 
   try {
@@ -144,8 +180,18 @@ async function syncInboundEmails(prisma) {
     /* ignore */
   }
 
-  log('info', 'imap_sync_complete', { imported, lastUid: maxUid });
-  return { skipped: false, imported, lastUid: maxUid };
+  log('info', 'imap_sync_complete', {
+    imported,
+    lastUid: batchMaxUid,
+    fetchFrom,
+    batchSize: messages.length,
+  });
+  return { skipped: false, imported, lastUid: batchMaxUid, fetchFrom };
 }
 
-module.exports = { syncInboundEmails, findLeadForAddress };
+module.exports = {
+  syncInboundEmails,
+  findLeadForAddress,
+  importInboundFromParsed,
+  normalizeAddr,
+};

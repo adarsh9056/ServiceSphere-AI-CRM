@@ -57,7 +57,7 @@ Set `JWT_SECRET` in the environment for production.
 - Leads list, search/filters, **Kanban** (`@dnd-kit`), dashboard (Recharts)
 - **DB-driven automation** (`automationEngine.js`): rules from `AutomationRule`, **execution log** (`AutomationExecution`), **deterministic round-robin** via `RoundRobinState`
 - Outbound email (Nodemailer), **password reset email** when `SMTP_*` + `PUBLIC_APP_URL` are set (no token logging)
-- **Inbound IMAP sync** (`imapSyncService` + `runInboundEmailSync` mutation), matching leads/contacts by email
+- **Inbound IMAP sync** by **UID range** (`UID lastUid+1:*`), not only `UNSEEN`, so mail read on other clients still imports; **batched** via `IMAP_SYNC_BATCH_SIZE`. `runInboundEmailSync` mutation + tests for import matching and deal-stage automation
 - WhatsApp (Twilio) on qualified-stage rule; sentiment + scoring (OpenAI)
 - Structured **JSON logs** in production (`LOG_FORMAT=json`), `LOG_REDACT` for extra caution
 - Server **integration tests** (`npm test` in `server/`) against PostgreSQL
