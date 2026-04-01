@@ -41,3 +41,9 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# Playwright
+e2e/.fixture.json
+test-results/
+playwright-report/
+playwright/.cache/

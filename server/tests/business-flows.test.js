@@ -103,6 +103,49 @@ test('importInboundFromParsed creates Email and dedupes by messageId', async () 
   }
 });
 
+test('importInboundFromParsed attaches to the matching lead only when multiple leads exist', async () => {
+  const id = suffix();
+  const sender = `buyer-${id}@corp.dev`;
+  const leadWrong = await prisma.lead.create({
+    data: {
+      name: 'Other account',
+      email: `other-${id}@elsewhere.dev`,
+      status: 'NEW',
+      score: 50,
+    },
+  });
+  const leadRight = await prisma.lead.create({
+    data: {
+      name: 'Right account',
+      email: sender,
+      status: 'NEW',
+      score: 50,
+    },
+  });
+  const mid = `<route-${id}@test.msg>`;
+  const parsed = {
+    from: { value: [{ address: sender }] },
+    subject: 'Routing check',
+    text: 'body',
+    messageId: mid,
+  };
+  try {
+    await importInboundFromParsed(prisma, { parsed, uid: 99, mailbox: 'INBOX' });
+    const row = await prisma.email.findFirst({ where: { messageId: mid } });
+    assert.ok(row);
+    assert.equal(row.leadId, leadRight.id);
+    assert.notEqual(row.leadId, leadWrong.id);
+    const onWrong = await prisma.email.count({
+      where: { leadId: leadWrong.id, messageId: mid },
+    });
+    assert.equal(onWrong, 0);
+  } finally {
+    await prisma.email.deleteMany({ where: { messageId: mid } });
+    await prisma.lead.delete({ where: { id: leadWrong.id } });
+    await prisma.lead.delete({ where: { id: leadRight.id } });
+  }
+});
+
 test('afterDealStageChange logs automation for QUALIFIED transition (WhatsApp rule)', async () => {
   const id = suffix();
   const hash = await bcrypt.hash('x', 10);

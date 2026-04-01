@@ -62,6 +62,28 @@ Set `JWT_SECRET` in the environment for production.
 - Structured **JSON logs** in production (`LOG_FORMAT=json`), `LOG_REDACT` for extra caution
 - Server **integration tests** (`npm test` in `server/`) against PostgreSQL
 
+## IMAP troubleshooting
+
+- If IMAP is configured but sync fails with `self-signed certificate`, your machine or network is likely intercepting TLS.
+- For **local debugging only**, set `IMAP_TLS_REJECT_UNAUTHORIZED="false"` in `server/.env`, restart the API, and try sync again.
+- Keep `IMAP_TLS_REJECT_UNAUTHORIZED="true"` in normal/production environments.
+
+## Playwright E2E (lead inbox flow)
+
+Requires **PostgreSQL**, migrated DB, and **seed data** (Jordan Lee lead). From repo root:
+
+```bash
+npm install
+npx playwright install chromium
+# Ensure server/.env has DATABASE_URL; client/.env.local has VITE_GRAPHQL_URL=http://localhost:4000/graphql
+cd server && npx prisma migrate deploy && npm run db:seed && cd ..
+npm run test:e2e
+```
+
+By default Playwright starts **API** and **Vite** if nothing is listening (`reuseExistingServer` when you already run `npm run dev` in both). The spec: **login** → open **lead** → **Communication** / **Timeline** show seeded inbound **A** → **Settings** → **Run IMAP sync** (expects `Imported N`) → seed **B** via `e2e/scripts/seed-inbound-email.cjs` (same as a new IMAP import) → lead **thread & timeline** show **B**.
+
+Override: `E2E_LEAD_EMAIL`, `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`. Skip auto web servers: `PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e`.
+
 ## Git
 
 Repository is initialized locally. Rename branch and push:
