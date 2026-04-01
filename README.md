@@ -70,12 +70,15 @@ Set `JWT_SECRET` in the environment for production.
 
 ## Playwright E2E (lead inbox flow)
 
-Requires **PostgreSQL**, migrated DB, and **seed data** (Jordan Lee lead). From repo root:
+Requires **PostgreSQL**, migrated DB, and **seed data** (Jordan Lee lead).
+
+**Run `npm run test:e2e` from the CRM repo root** (`/Users/adarshgupta/Documents/CRM`), not from `server/`. (From `server/` you can use `npm run test:e2e` there too — it delegates to the root.)
 
 ```bash
+cd /Users/adarshgupta/Documents/CRM
 npm install
 npx playwright install chromium
-# Ensure server/.env has DATABASE_URL; client/.env.local has VITE_GRAPHQL_URL=http://localhost:4000/graphql
+# server/.env must define DATABASE_URL (copy from server/.env.example)
 cd server && npx prisma migrate deploy && npm run db:seed && cd ..
 npm run test:e2e
 ```

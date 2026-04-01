@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 const { PrismaClient, UserRole, LeadStatus, DealStage } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 
