@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react'
-import { useQuery, useMutation } from '@apollo/client/react'
+import { useMemo, useState, useRef } from 'react'
+import { useQuery, useMutation, useApolloClient } from '@apollo/client/react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   GET_LEADS,
   CREATE_LEAD,
   GENERATE_AI_REPLY,
   SEND_EMAIL,
+  ME,
+  EXPORT_LEADS_CSV,
+  IMPORT_LEADS_CSV,
 } from '../graphql/operations'
 
 const STATUSES = [
@@ -46,7 +49,12 @@ export default function Leads() {
   )
 
   const { data, loading, refetch } = useQuery(GET_LEADS, { variables })
+  const { data: meData } = useQuery(ME)
+  const client = useApolloClient()
+  const importInputRef = useRef(null)
+  const [importMsg, setImportMsg] = useState('')
   const [createLead, { loading: creating }] = useMutation(CREATE_LEAD)
+  const [importLeadsCsv, { loading: importing }] = useMutation(IMPORT_LEADS_CSV)
   const [generateAi] = useMutation(GENERATE_AI_REPLY)
   const [sendEmail, { loading: sending }] = useMutation(SEND_EMAIL)
 
@@ -91,6 +99,37 @@ export default function Leads() {
     if (el) el.value = d.generateAIReply.body
   }
 
+  const canBulkImportExport =
+    meData?.me?.role === 'MANAGER' || meData?.me?.role === 'ADMIN'
+
+  async function onExportCsv() {
+    const { data: d } = await client.query({ query: EXPORT_LEADS_CSV, fetchPolicy: 'network-only' })
+    const blob = new Blob([d.exportLeadsCsv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `leads-export-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function onPickImport(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImportMsg('')
+    try {
+      const text = await file.text()
+      const { data: d } = await importLeadsCsv({ variables: { csvText: text } })
+      const r = d.importLeadsCsv
+      setImportMsg(`Imported ${r.created}, skipped ${r.skipped}.`)
+      if (r.errors?.length) setImportMsg((m) => `${m} Errors: ${r.errors.slice(0, 3).join('; ')}`)
+      refetch()
+    } catch (err) {
+      setImportMsg(err.message || 'Import failed')
+    }
+  }
+
   async function onSendEmail(e) {
     e.preventDefault()
     if (!composeLead) return
@@ -113,14 +152,45 @@ export default function Leads() {
             Search, filter, and follow up.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          New lead
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canBulkImportExport && (
+            <>
+              <button
+                type="button"
+                onClick={onExportCsv}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium dark:border-slate-600 dark:bg-slate-900"
+              >
+                Export CSV
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={onPickImport}
+              />
+              <button
+                type="button"
+                disabled={importing}
+                onClick={() => importInputRef.current?.click()}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900"
+              >
+                {importing ? 'Importing…' : 'Import CSV'}
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            New lead
+          </button>
+        </div>
       </div>
+      {importMsg && (
+        <p className="text-sm text-slate-600 dark:text-slate-400">{importMsg}</p>
+      )}
 
       <form
         onSubmit={applySearch}

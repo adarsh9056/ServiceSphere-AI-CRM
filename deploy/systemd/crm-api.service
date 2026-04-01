@@ -1,0 +1,18 @@
+[Unit]
+Description=ServiceSphere CRM API
+After=network.target
+
+[Service]
+Type=simple
+User=crm
+Group=crm
+WorkingDirectory=/opt/servicesphere/server
+EnvironmentFile=/etc/crm.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

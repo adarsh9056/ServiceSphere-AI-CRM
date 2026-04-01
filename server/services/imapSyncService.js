@@ -2,6 +2,12 @@ const imaps = require('imap-simple');
 const { simpleParser } = require('mailparser');
 const { log } = require('../middleware/logger');
 
+function envBool(name, defaultValue) {
+  const raw = process.env[name];
+  if (raw == null || raw === '') return defaultValue;
+  return !['false', '0', 'no', 'off'].includes(String(raw).trim().toLowerCase());
+}
+
 function normalizeAddr(s) {
   if (!s) return null;
   const m = String(s).match(/<([^>]+)>/);
@@ -88,7 +94,8 @@ async function syncInboundEmails(prisma) {
   }
 
   const port = Number(process.env.IMAP_PORT || 993);
-  const tls = process.env.IMAP_TLS !== 'false';
+  const tls = envBool('IMAP_TLS', true);
+  const rejectUnauthorized = envBool('IMAP_TLS_REJECT_UNAUTHORIZED', true);
   const batchSize = Math.max(1, Math.min(2000, Number(process.env.IMAP_SYNC_BATCH_SIZE || 200)));
 
   const config = {
@@ -98,6 +105,7 @@ async function syncInboundEmails(prisma) {
       host: process.env.IMAP_HOST,
       port,
       tls,
+      tlsOptions: tls ? { rejectUnauthorized } : undefined,
       authTimeout: 15000,
     },
   };
@@ -194,4 +202,5 @@ module.exports = {
   findLeadForAddress,
   importInboundFromParsed,
   normalizeAddr,
+  envBool,
 };

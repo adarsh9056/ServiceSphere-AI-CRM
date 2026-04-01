@@ -10,6 +10,7 @@ import {
   GENERATE_AI_REPLY,
   SEND_EMAIL,
 } from '../graphql/operations'
+import { getApiBase } from '../lib/apiBase'
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -110,6 +111,34 @@ export default function LeadDetail() {
     setAiBody(body)
     setComposeBody(body)
     setComposeTo(lead.email || '')
+  }
+
+  function attachmentHref(url) {
+    if (!url) return '#'
+    if (url.startsWith('http')) return url
+    return `${getApiBase()}${url}`
+  }
+
+  async function onUploadAttachment(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const token = localStorage.getItem('token')
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('leadId', id)
+    const r = await fetch(`${getApiBase()}/api/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { authorization: token ? `Bearer ${token}` : '' },
+      body: fd,
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      alert(err.error || 'Upload failed')
+      return
+    }
+    refetch()
   }
 
   async function onSendApproved(e) {
@@ -216,6 +245,34 @@ export default function LeadDetail() {
                 <li key={t.id} className="flex justify-between gap-2">
                   <span>{t.title}</span>
                   <span className="text-xs text-slate-500">{t.status}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-white">Attachments</h2>
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.docx,.xlsx"
+              className="mt-2 block w-full text-xs text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 dark:text-slate-400 dark:file:bg-slate-800"
+              onChange={onUploadAttachment}
+            />
+            <ul className="mt-2 space-y-1 text-sm">
+              {(lead.attachments || []).map((a) => (
+                <li key={a.id}>
+                  <a
+                    className="text-blue-600 hover:underline dark:text-blue-400"
+                    href={attachmentHref(a.downloadUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {a.fileName}
+                  </a>
+                  <span className="text-xs text-slate-500">
+                    {' '}
+                    ({Math.round((a.sizeBytes || 0) / 1024)} KB)
+                  </span>
                 </li>
               ))}
             </ul>

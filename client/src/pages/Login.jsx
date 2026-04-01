@@ -28,15 +28,16 @@ export default function Login() {
     <div className="flex min-h-svh items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Sign in</h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          ServiceSphere CRM — demo: admin@servicesphere.dev / admin123
-        </p>
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label
+              htmlFor="login-email"
+              className="block text-xs font-medium text-slate-600 dark:text-slate-400"
+            >
               Email
             </label>
             <input
+              id="login-email"
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
               type="email"
               value={email}
@@ -45,10 +46,14 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label
+              htmlFor="login-password"
+              className="block text-xs font-medium text-slate-600 dark:text-slate-400"
+            >
               Password
             </label>
             <input
+              id="login-password"
               className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
               type="password"
               value={password}

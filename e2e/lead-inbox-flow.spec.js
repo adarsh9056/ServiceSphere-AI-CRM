@@ -1,8 +1,14 @@
 // @ts-check
+/**
+ * E2E covers the product path (login → lead mail UI → Settings sync → UI updates).
+ * Message B is inserted via Prisma (same shape as IMAP import), not fetched over IMAP;
+ * real mailbox import is validated manually or with a dedicated IMAP integration environment.
+ */
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { loginAs } = require('./helpers/auth.cjs');
 
 const fixturePath = path.join(__dirname, '.fixture.json');
 
@@ -34,13 +40,7 @@ test.describe('Lead inbox (E2E)', () => {
     const adminEmail = process.env.E2E_ADMIN_EMAIL || 'admin@servicesphere.dev';
     const adminPass = process.env.E2E_ADMIN_PASSWORD || 'admin123';
 
-    await page.goto('/login');
-    await page.getByLabel('Email').fill(adminEmail);
-    await page.getByLabel('Password').fill(adminPass);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible({
-      timeout: 20_000,
-    });
+    await loginAs(page, { email: adminEmail, password: adminPass });
 
     await page.goto(`/leads/${fixture.leadId}`);
 

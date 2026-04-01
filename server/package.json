@@ -4,12 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "worker": "node worker.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node -r ./tests/env-bootstrap.cjs --test tests/*.test.js",
     "test:e2e": "npm run test:e2e --prefix .."
   },
   "keywords": [],
@@ -24,20 +26,31 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1021.0",
+    "@aws-sdk/s3-request-presigner": "^3.1021.0",
     "@graphql-tools/schema": "^10.0.31",
     "@prisma/client": "^6.8.2",
+    "@sentry/node": "^10.47.0",
     "apollo-server-express": "^3.13.0",
     "bcrypt": "^6.0.0",
+    "cookie": "^1.1.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "csv-parse": "^6.2.1",
     "dotenv": "^17.3.1",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.2",
     "express-validator": "^7.3.1",
     "graphql": "^16.13.2",
+    "helmet": "^8.1.0",
     "imap-simple": "^5.1.0",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "mailparser": "^3.9.6",
+    "multer": "^2.1.1",
     "nodemailer": "^8.0.4",
     "openai": "^6.33.0",
+    "rate-limit-redis": "^4.3.1",
     "twilio": "^5.13.1"
   }
 }

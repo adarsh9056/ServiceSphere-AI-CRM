@@ -1,114 +1,310 @@
 # ServiceSphere CRM
 
-Industry-style CRM stack: **React (Vite)**, **Node/Express**, **Apollo GraphQL**, **Prisma**, **PostgreSQL**, with Kanban pipeline, dashboards (Recharts), email/WhatsApp/AI hooks, automation rule models, **Docker Compose**, and **GitHub Actions** CI.
+ServiceSphere CRM is a production-minded CRM platform built with **React**, **Node.js**, **GraphQL**, **Prisma**, and **PostgreSQL**.
 
-## Quick start (local)
+It is designed to feel like a real sales workspace, not a CRUD demo: leads and deals move through a Kanban pipeline, communication is tracked on a unified timeline, IMAP can pull inbound mail into the CRM, AI helps with follow-ups and sentiment, and a separate worker process handles background automation.
 
-1. **Database** — from repo root:
+## Overview
 
-   ```bash
-   docker compose up -d postgres
-   ```
+This project covers:
 
-   Or point `server/.env` `DATABASE_URL` at any PostgreSQL instance.
+- authentication with access tokens and refresh-token rotation
+- role-based access for **Admin**, **Manager**, and **Salesperson**
+- lead, account, contact, deal, task, note, attachment, and activity management
+- drag-and-drop pipeline movement with deal stage history
+- lead detail workspace with overview, communication thread, attachments, and unified timeline
+- AI follow-up drafting and sentiment analysis
+- outbound email, inbound IMAP sync, and WhatsApp automation hooks
+- CSV lead import/export
+- background jobs through a dedicated worker process
+- CI with server tests, client build validation, and Playwright E2E
+- deployment and ops documentation for Docker, cloud platforms, and EC2
 
-2. **Backend**
+## Tech Stack
 
-   ```bash
-   cd server
-   cp .env.example .env
-   npm install
-   npx prisma migrate deploy
-   npx prisma db seed
-   npm run dev
-   ```
+**Frontend**
 
-   API: `http://localhost:4000/graphql` · Health: `http://localhost:4000/health`
+- React 19
+- Vite
+- Tailwind CSS v4
+- React Router
+- Apollo Client
+- Recharts
+- `@dnd-kit`
 
-3. **Frontend**
+**Backend**
 
-   ```bash
-   cd client
-   npm install
-   echo 'VITE_GRAPHQL_URL=http://localhost:4000/graphql' > .env.local
-   npm run dev
-   ```
+- Node.js
+- Express 4
+- Apollo Server / GraphQL
+- Prisma ORM
+- PostgreSQL
+- JWT auth
+- Nodemailer
+- `imap-simple`
+- Twilio
+- OpenAI
 
-4. **Demo logins** (after seed)
+**Ops / Quality**
 
-   - `admin@servicesphere.dev` / `admin123`
-   - `manager@servicesphere.dev` / `manager123`
-   - `sales@servicesphere.dev` / `sales123`
+- Docker Compose
+- GitHub Actions
+- Playwright
+- Structured logging
+- Optional Sentry integration
 
-## Docker (API + Postgres)
+## Product Flow
 
-```bash
-docker compose up --build
+1. Users log in and land in the CRM workspace.
+2. Leads are created, assigned, scored, and worked through the sales process.
+3. Deals move across a Kanban pipeline from new opportunity to won or lost.
+4. Every lead has a detailed workspace with:
+   - account and contact context
+   - tasks and notes
+   - attachments
+   - email thread
+   - stage history
+   - unified timeline
+5. AI can draft follow-ups and analyze message sentiment.
+6. Background automations handle assignment, stale-deal reminders, and messaging hooks.
+7. Managers and admins can review dashboards, activity, automation rules, and execution logs.
+
+## Core Features
+
+### CRM and Sales Workflow
+
+- Leads list with search and status filters
+- Lead scoring
+- Accounts and contacts
+- Deal pipeline with drag-and-drop movement
+- Deal stage audit history
+- Tasks and notes
+- Activity feed and unified lead timeline
+
+### Communication
+
+- Outbound email logging
+- Password reset email flow
+- Inbound IMAP sync using **UID-based incremental import**
+- WhatsApp automation trigger on qualified-stage transitions
+
+### AI
+
+- AI-generated follow-up drafts
+- Email sentiment analysis
+- Sentiment-aware lead updates and manager notification hooks
+
+### Production-Minded Additions
+
+- Helmet security headers
+- GraphQL rate limiting
+- Login throttling
+- Refresh-session flow
+- Background jobs moved into `worker.js`
+- CSV import/export
+- Attachment upload/download support
+- Playwright E2E coverage
+- CI for server, client, and browser flows
+
+## Project Structure
+
+```text
+.
+├── client/                     # React application
+├── server/                     # Express + GraphQL + Prisma API
+├── e2e/                        # Playwright tests and helpers
+├── docs/                       # Runbook and deployment guides
+├── docker-compose.yml
+├── playwright.config.js
+└── README.md
 ```
 
-Set `JWT_SECRET` in the environment for production.
+## Local Development
 
-## Features implemented
+### 1. Start PostgreSQL
 
-- JWT auth (signup creates **salesperson** only; admins/managers from seed)
-- Role-based GraphQL access (**Admin**, **Manager**, **Salesperson**)
-- **Accounts, contacts, tasks, notes, attachments model**; **deal stage history** on every move
-- **Lead detail** (`/leads/:id`): timeline, email thread, AI sentiment + draft + **approve-then-send**
-- Leads list, search/filters, **Kanban** (`@dnd-kit`), dashboard (Recharts)
-- **DB-driven automation** (`automationEngine.js`): rules from `AutomationRule`, **execution log** (`AutomationExecution`), **deterministic round-robin** via `RoundRobinState`
-- Outbound email (Nodemailer), **password reset email** when `SMTP_*` + `PUBLIC_APP_URL` are set (no token logging)
-- **Inbound IMAP sync** by **UID range** (`UID lastUid+1:*`), not only `UNSEEN`, so mail read on other clients still imports; **batched** via `IMAP_SYNC_BATCH_SIZE`. `runInboundEmailSync` mutation + tests for import matching and deal-stage automation
-- WhatsApp (Twilio) on qualified-stage rule; sentiment + scoring (OpenAI)
-- Structured **JSON logs** in production (`LOG_FORMAT=json`), `LOG_REDACT` for extra caution
-- Server **integration tests** (`npm test` in `server/`) against PostgreSQL
-
-## IMAP troubleshooting
-
-- If IMAP is configured but sync fails with `self-signed certificate`, your machine or network is likely intercepting TLS.
-- For **local debugging only**, set `IMAP_TLS_REJECT_UNAUTHORIZED="false"` in `server/.env`, restart the API, and try sync again.
-- Keep `IMAP_TLS_REJECT_UNAUTHORIZED="true"` in normal/production environments.
-
-## Playwright E2E (lead inbox flow)
-
-Requires **PostgreSQL**, migrated DB, and **seed data** (Jordan Lee lead).
-
-**Run `npm run test:e2e` from the CRM repo root** (`/Users/adarshgupta/Documents/CRM`), not from `server/`. (From `server/` you can use `npm run test:e2e` there too — it delegates to the root.)
+If Docker is available:
 
 ```bash
-cd /Users/adarshgupta/Documents/CRM
+docker compose up -d postgres
+```
+
+Or point `server/.env` `DATABASE_URL` at any PostgreSQL instance.
+
+### 2. Start the backend API
+
+```bash
+cd server
+cp .env.example .env
+npm install
+npx prisma migrate deploy
+npm run db:seed
+npm run dev
+```
+
+API endpoints:
+
+- GraphQL: `http://localhost:4000/graphql`
+- Health: `http://localhost:4000/health`
+
+### 3. Start the frontend
+
+```bash
+cd client
+npm install
+echo 'VITE_GRAPHQL_URL=http://localhost:4000/graphql' > .env.local
+npm run dev
+```
+
+Optional:
+
+- use `VITE_GRAPHQL_URL=/graphql` with the Vite proxy for a single-origin local setup
+- use a full deployed API URL when the frontend and backend live on different domains
+
+### 4. Start the worker
+
+The worker is responsible for IMAP polling and stale-deal automation.
+
+```bash
+cd server
+npm run worker
+```
+
+## Demo Accounts
+
+After seeding:
+
+- `admin@servicesphere.dev` / `admin123`
+- `manager@servicesphere.dev` / `manager123`
+- `sales@servicesphere.dev` / `sales123`
+
+## Environment Notes
+
+Main API variables:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `CLIENT_ORIGIN`
+- `PUBLIC_APP_URL`
+- `PUBLIC_API_URL`
+
+Optional integrations:
+
+- `SMTP_*`
+- `OPENAI_API_KEY`
+- `TWILIO_*`
+- `IMAP_*`
+- `SENTRY_DSN`
+
+## IMAP Notes
+
+Inbound sync is **UID-based**, not just `UNSEEN`-based. Each sync advances the stored cursor and only asks the mailbox for newer messages.
+
+That means **Imported 0** is often correct: there may simply be no new UID after the last successful sync.
+
+Useful debugging tips:
+
+- match the email **From** address to a lead or contact email if you want the message attached to a lead
+- use `IMAP_SKIP_BOOT_SYNC=true` when you want more predictable manual testing
+- increase `IMAP_SYNC_INTERVAL_MS` during local debugging if background sync is consuming mail before manual sync
+- for local TLS interception issues only, set `IMAP_TLS_REJECT_UNAUTHORIZED="false"`
+
+## Testing
+
+### Server tests
+
+```bash
+cd server
+npm test
+```
+
+### Playwright E2E
+
+Run from the repo root:
+
+```bash
 npm install
 npx playwright install chromium
-# server/.env must define DATABASE_URL (copy from server/.env.example)
 cd server && npx prisma migrate deploy && npm run db:seed && cd ..
 npm run test:e2e
 ```
 
-By default Playwright starts **API** and **Vite** if nothing is listening (`reuseExistingServer` when you already run `npm run dev` in both). The spec: **login** → open **lead** → **Communication** / **Timeline** show seeded inbound **A** → **Settings** → **Run IMAP sync** (expects `Imported N`) → seed **B** via `e2e/scripts/seed-inbound-email.cjs` (same as a new IMAP import) → lead **thread & timeline** show **B**.
+Current browser coverage includes:
 
-Override: `E2E_LEAD_EMAIL`, `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`. Skip auto web servers: `PLAYWRIGHT_SKIP_WEBSERVER=1 npm run test:e2e`.
-
-## Git
-
-Repository is initialized locally. Rename branch and push:
-
-```bash
-git branch -m main
-git remote add origin https://github.com/YOUR_ORG/servicesphere-crm.git
-git push -u origin main
-```
-
-## Deploy
-
-- **Vercel (frontend)**: Project root `client`, build `npm run build`, output `dist`, env `VITE_GRAPHQL_URL=https://your-api/graphql`
-- **Render / Railway (API)**: Root `server`, start command `npx prisma migrate deploy && node server.js`, env `DATABASE_URL`, `JWT_SECRET`, `CLIENT_ORIGIN`, `SMTP_*`, `OPENAI_API_KEY`, optional `IMAP_*`
+- login flow
+- lead detail task and note flow
+- pipeline stage movement
+- manager dashboard and lead filtering
+- lead communication UI flow with seeded inbound-email data
 
 ## CI
 
-`.github/workflows/ci.yml` runs two jobs on `main`: **server** (Postgres service → `prisma migrate deploy` → `npm test`) and **client** (`npm ci` → `npm run build`). Forks need Actions enabled.
+GitHub Actions in [.github/workflows/ci.yml](.github/workflows/ci.yml) runs:
 
-## Manual checklist (production)
+- server tests against PostgreSQL
+- client build validation
+- Playwright E2E with seeded data
 
-- Set strong `JWT_SECRET`, never commit `.env`
-- Configure SMTP for real password resets; set `PUBLIC_APP_URL` to the SPA origin
-- Schedule DB backups (provider snapshots or `pg_dump`)
-- Add monitoring (health: `GET /health`) and log aggregation
+## Deployment
+
+### Frontend
+
+- Vercel or any static host
+- build from `client/`
+- set `VITE_GRAPHQL_URL` to the deployed API
+
+### API
+
+- Render, Railway, Docker host, or EC2
+- run Prisma migrations before startup
+- set production secrets and integration variables
+
+### Worker
+
+Run `node worker.js` alongside the API in production.
+
+### EC2
+
+See:
+
+- [docs/EC2_DEPLOY.md](docs/EC2_DEPLOY.md)
+- [docs/RUNBOOK.md](docs/RUNBOOK.md)
+
+The docs cover:
+
+- nginx reverse proxy guidance
+- HTTPS / Certbot setup
+- PM2 / systemd examples
+- RDS and backup notes
+- monitoring and incident checks
+
+## Why This Project Matters
+
+This project is intended to demonstrate more than frontend screens. It shows how to design and connect:
+
+- a real sales workflow
+- a structured relational data model
+- background jobs
+- third-party integrations
+- AI-assisted product features
+- CI and E2E testing
+- deployment and operations documentation
+
+In short, it is a strong full-stack CRM foundation with real product thinking behind it.
+
+## Production Checklist
+
+Before a public deployment:
+
+- use a strong `JWT_SECRET`
+- configure SMTP for real outbound mail and password resets
+- run the worker in production
+- configure backups
+- add monitoring and uptime checks
+- review upload restrictions and storage strategy
+- review auth and rate-limit settings for your deployment topology
+
+## Additional Docs
+
+- [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- [docs/EC2_DEPLOY.md](docs/EC2_DEPLOY.md)

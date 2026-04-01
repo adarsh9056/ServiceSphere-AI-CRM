@@ -25,6 +25,12 @@ export const LOGIN = gql`
   }
 `
 
+export const LOGOUT = gql`
+  mutation Logout {
+    logout
+  }
+`
+
 export const SIGNUP = gql`
   mutation Signup($name: String!, $email: String!, $password: String!) {
     signup(name: $name, email: $email, password: $password) {
@@ -273,6 +279,30 @@ export const GET_LEAD_DETAIL = gql`
         toAddress
         createdAt
       }
+      attachments {
+        id
+        fileName
+        mimeType
+        sizeBytes
+        downloadUrl
+        createdAt
+      }
+    }
+  }
+`
+
+export const EXPORT_LEADS_CSV = gql`
+  query ExportLeadsCsv {
+    exportLeadsCsv
+  }
+`
+
+export const IMPORT_LEADS_CSV = gql`
+  mutation ImportLeadsCsv($csvText: String!) {
+    importLeadsCsv(csvText: $csvText) {
+      created
+      skipped
+      errors
     }
   }
 `

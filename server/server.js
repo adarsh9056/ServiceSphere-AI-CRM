@@ -1,38 +1,76 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const { ApolloServer } = require('apollo-server-express');
 const typeDefs = require('./graphql/typeDefs');
 const { resolvers, prisma } = require('./graphql/resolvers');
 const { authMiddleware } = require('./middleware/auth');
 const { log } = require('./middleware/logger');
-const { runStaleDealReminders } = require('./services/automationEngine');
-const { syncInboundEmails } = require('./services/imapSyncService');
+const { validateProductionConfig } = require('./config/bootstrap');
+const { createRateLimiters } = require('./middleware/rateLimit');
+const { registerUploadRoutes } = require('./routes/uploadRoutes');
+const { initSentry } = require('./services/sentry');
+
+const Sentry = initSentry();
+
+try {
+  validateProductionConfig();
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
+}
 
 const PORT = Number(process.env.PORT || 4000);
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
 async function main() {
+  const { graphqlLimiter, graphqlUnauthLimiter } = await createRateLimiters();
+
   const app = express();
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      contentSecurityPolicy: false,
+    }),
+  );
   app.use(
     cors({
       origin: CLIENT_ORIGIN,
       credentials: true,
     }),
   );
-  app.use(express.json());
+  app.use(cookieParser());
+  app.use(express.json({ limit: '2mb' }));
 
-  app.get('/health', (_, res) => res.json({ ok: true, service: 'servicesphere-api' }));
+  registerUploadRoutes(app);
+
+  app.get('/health', (_, res) =>
+    res.json({
+      ok: true,
+      service: 'servicesphere-api',
+      workerMode: false,
+    }),
+  );
 
   const getUser = authMiddleware(prisma);
+  app.use('/graphql', graphqlUnauthLimiter);
+  app.use('/graphql', graphqlLimiter);
+
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    context: async ({ req }) => {
+    context: async ({ req, res }) => {
       const { user } = await getUser(req);
-      return { user };
+      return { user, req, res };
     },
     formatError: (err) => {
+      if (Sentry?.captureException) {
+        Sentry.captureException(err.originalError || err);
+      }
       log('error', 'graphql_error', { message: err.message });
       return err;
     },
@@ -42,22 +80,12 @@ async function main() {
   server.applyMiddleware({ app, path: '/graphql', cors: false });
 
   app.listen(PORT, () => {
-    log('info', 'server_started', { port: PORT, path: server.graphqlPath });
+    log('info', 'server_started', {
+      port: PORT,
+      path: server.graphqlPath,
+      backgroundJobs: 'disabled (use worker process)',
+    });
   });
-
-  const HOUR = 60 * 60 * 1000;
-  const imapInterval = Number(process.env.IMAP_SYNC_INTERVAL_MS || 5 * 60 * 1000);
-
-  setInterval(() => {
-    runStaleDealReminders(prisma).catch((e) => log('error', 'cron_stale_deals', { message: e.message }));
-  }, HOUR);
-
-  if (process.env.IMAP_HOST && process.env.IMAP_USER) {
-    syncInboundEmails(prisma).catch((e) => log('error', 'imap_sync_boot', { message: e.message }));
-    setInterval(() => {
-      syncInboundEmails(prisma).catch((e) => log('error', 'imap_sync_cron', { message: e.message }));
-    }, imapInterval);
-  }
 }
 
 main().catch((e) => {

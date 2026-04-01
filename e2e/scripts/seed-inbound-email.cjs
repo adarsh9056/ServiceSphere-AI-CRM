@@ -8,12 +8,14 @@
  *   E2E_MESSAGE_ID — optional RFC Message-ID (must be unique)
  */
 const path = require('path');
+const { createRequire } = require('module');
 
 const serverRoot = path.join(__dirname, '..', '..', 'server');
+const serverRequire = createRequire(path.join(serverRoot, 'package.json'));
 process.chdir(serverRoot);
-require('dotenv').config({ path: path.join(serverRoot, '.env') });
+serverRequire('dotenv').config({ path: path.join(serverRoot, '.env') });
 
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = serverRequire('@prisma/client');
 
 async function main() {
   const prisma = new PrismaClient();

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useQuery } from '@apollo/client/react'
-import { ME } from '../graphql/operations'
+import { useQuery, useMutation } from '@apollo/client/react'
+import { ME, LOGOUT } from '../graphql/operations'
 import { useTheme } from '../context/ThemeContext'
 
 const nav = [
@@ -15,8 +15,14 @@ export default function Layout() {
   const { data } = useQuery(ME)
   const navigate = useNavigate()
   const { dark, toggle } = useTheme()
+  const [logoutMutation] = useMutation(LOGOUT)
 
-  function logout() {
+  async function logout() {
+    try {
+      await logoutMutation()
+    } catch (_) {
+      /* still sign out locally */
+    }
     localStorage.removeItem('token')
     navigate('/login', { replace: true })
   }

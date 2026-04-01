@@ -1,9 +1,20 @@
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { PrismaClient, UserRole, Prisma } = require('@prisma/client');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const {
+  assertLoginAllowed,
+  recordLoginFailure,
+  clearLoginFailures,
+} = require('../middleware/loginThrottle');
+const { signAccessToken, createRefreshToken, consumeRefreshToken } = require('../auth/tokens');
+const {
+  setRefreshTokenCookie,
+  clearRefreshTokenCookie,
+  getRefreshTokenFromRequest,
+} = require('../auth/cookies');
 const { log } = require('../middleware/logger');
+const { parseLeadsCsv, leadsToCsv } = require('../services/csvLeadsService');
 const { sendMail, sendPasswordResetEmail } = require('../services/emailService');
 const { generateFollowUpEmail, analyzeSentiment } = require('../services/aiService');
 const { computeLeadScore } = require('../services/leadScore');
@@ -11,12 +22,6 @@ const automation = require('../services/automationEngine');
 const { syncInboundEmails } = require('../services/imapSyncService');
 
 const prisma = new PrismaClient();
-
-const JWT_SECRET = () => process.env.JWT_SECRET || 'dev-secret';
-
-function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET(), { expiresIn: '7d' });
-}
 
 const includeLeadList = {
   assignedTo: true,
@@ -36,6 +41,7 @@ const includeLeadDetail = {
   },
   tasks: { include: { assignedTo: true, createdBy: true }, orderBy: { dueAt: 'asc' } },
   leadNotes: { include: { createdBy: true }, orderBy: { createdAt: 'desc' } },
+  attachments: { orderBy: { createdAt: 'desc' }, take: 100 },
   emails: { orderBy: { createdAt: 'desc' }, take: 100 },
   whatsappMessages: { orderBy: { createdAt: 'desc' }, take: 50 },
   activities: {
@@ -372,6 +378,15 @@ const resolvers = {
       return prisma.automationRule.findMany({ orderBy: { createdAt: 'desc' } });
     },
 
+    exportLeadsCsv: async (_, __, { user }) => {
+      requireRole(user, UserRole.ADMIN, UserRole.MANAGER);
+      const leads = await prisma.lead.findMany({
+        orderBy: { updatedAt: 'desc' },
+        include: { assignedTo: true },
+      });
+      return leadsToCsv(leads);
+    },
+
     getAutomationExecutions: async (_, { limit = 50 }, { user }) => {
       requireRole(user, UserRole.ADMIN, UserRole.MANAGER);
       return prisma.automationExecution.findMany({
@@ -383,7 +398,7 @@ const resolvers = {
   },
 
   Mutation: {
-    signup: async (_, { name, email, password }) => {
+    signup: async (_, { name, email, password }, ctx) => {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) throw new Error('Email already registered');
 
@@ -393,21 +408,48 @@ const resolvers = {
         data: { name, email, password: hash, role },
         select: { id: true, name: true, email: true, role: true },
       });
-      return { token: signToken(user), user };
+      const refreshToken = await createRefreshToken(prisma, user.id);
+      setRefreshTokenCookie(ctx.res, refreshToken);
+      return { token: signAccessToken(user), refreshToken: null, user };
     },
 
-    login: async (_, { email, password }) => {
+    login: async (_, { email, password }, ctx) => {
+      await assertLoginAllowed(email, ctx.req);
       const userRecord = await prisma.user.findUnique({ where: { email } });
-      if (!userRecord) throw new Error('Invalid credentials');
+      if (!userRecord) {
+        await recordLoginFailure(email, ctx.req);
+        throw new Error('Invalid credentials');
+      }
       const ok = await bcrypt.compare(password, userRecord.password);
-      if (!ok) throw new Error('Invalid credentials');
+      if (!ok) {
+        await recordLoginFailure(email, ctx.req);
+        throw new Error('Invalid credentials');
+      }
+      await clearLoginFailures(email, ctx.req);
       const user = {
         id: userRecord.id,
         name: userRecord.name,
         email: userRecord.email,
         role: userRecord.role,
       };
-      return { token: signToken(user), user };
+      const refreshToken = await createRefreshToken(prisma, user.id);
+      setRefreshTokenCookie(ctx.res, refreshToken);
+      return { token: signAccessToken(user), refreshToken: null, user };
+    },
+
+    refreshSession: async (_, { refreshToken: bodyToken }, ctx) => {
+      const raw = bodyToken || getRefreshTokenFromRequest(ctx.req);
+      if (!raw) throw new Error('Missing refresh token');
+      const user = await consumeRefreshToken(prisma, raw);
+      if (!user) throw new Error('Invalid or expired refresh token');
+      const nextRefresh = await createRefreshToken(prisma, user.id);
+      setRefreshTokenCookie(ctx.res, nextRefresh);
+      return { token: signAccessToken(user), refreshToken: null, user };
+    },
+
+    logout: async (_, __, ctx) => {
+      clearRefreshTokenCookie(ctx.res);
+      return true;
     },
 
     requestPasswordReset: async (_, { email }) => {
@@ -835,11 +877,55 @@ const resolvers = {
         error: result.error || null,
       };
     },
+
+    importLeadsCsv: async (_, { csvText }, { user }) => {
+      requireRole(user, UserRole.ADMIN, UserRole.MANAGER);
+      const rows = parseLeadsCsv(csvText);
+      let created = 0;
+      let skipped = 0;
+      const errors = [];
+      for (const row of rows) {
+        if (!row.name || !String(row.name).trim()) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          await prisma.lead.create({
+            data: {
+              name: String(row.name).trim(),
+              company: row.company || null,
+              email: row.email || null,
+              phone: row.phone || null,
+              source: row.source || 'csv_import',
+              status: 'NEW',
+              score: computeLeadScore({
+                companySize: row.companySize ? Number(row.companySize) : 0,
+                openedEmail: false,
+                repliedEmail: false,
+              }),
+            },
+          });
+          created += 1;
+        } catch (e) {
+          errors.push(e.message || String(e));
+        }
+      }
+      return { created, skipped, errors };
+    },
   },
 
   Lead: {
     createdAt: (p) => p.createdAt.toISOString(),
     updatedAt: (p) => p.updatedAt.toISOString(),
+    attachments: (p) => p.attachments || [],
+  },
+
+  Attachment: {
+    downloadUrl: (a) => {
+      const base = (process.env.PUBLIC_API_URL || '').replace(/\/$/, '');
+      return base ? `${base}/api/files/${a.id}` : `/api/files/${a.id}`;
+    },
+    createdAt: (a) => a.createdAt.toISOString(),
   },
   Deal: {
     value: (p) => (p.value != null ? String(p.value) : null),

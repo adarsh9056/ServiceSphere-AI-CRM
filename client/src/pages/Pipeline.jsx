@@ -56,6 +56,7 @@ function Column({ stageId, label, deals }) {
   return (
     <div
       ref={setNodeRef}
+      data-testid={`pipeline-column-${stageId}`}
       className={[
         'flex min-h-[320px] w-72 shrink-0 flex-col gap-3 rounded-xl border bg-slate-50 p-3 dark:bg-slate-900/40',
         isOver ? 'border-blue-500 ring-2 ring-blue-400/40' : 'border-slate-200 dark:border-slate-800',

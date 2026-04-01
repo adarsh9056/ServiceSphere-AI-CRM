@@ -101,6 +101,15 @@ module.exports = gql`
     createdAt: String!
   }
 
+  type Attachment {
+    id: ID!
+    fileName: String!
+    mimeType: String!
+    sizeBytes: Int!
+    downloadUrl: String!
+    createdAt: String!
+  }
+
   type Lead {
     id: ID!
     name: String!
@@ -123,6 +132,9 @@ module.exports = gql`
     deals: [Deal!]!
     tasks: [Task!]!
     leadNotes: [Note!]!
+    emails: [EmailRecord!]!
+    whatsappMessages: [WhatsappRecord!]!
+    attachments: [Attachment!]!
   }
 
   type Deal {
@@ -178,7 +190,15 @@ module.exports = gql`
 
   type AuthPayload {
     token: String!
+    """Always null from API; refresh token is HttpOnly cookie (not exposed to JS)."""
+    refreshToken: String
     user: User!
+  }
+
+  type ImportLeadsResult {
+    created: Int!
+    skipped: Int!
+    errors: [String!]!
   }
 
   type DashboardStats {
@@ -247,11 +267,15 @@ module.exports = gql`
     getWhatsappForLead(leadId: ID!): [WhatsappRecord!]!
     getAutomationRules: [AutomationRule!]!
     getAutomationExecutions(limit: Int): [AutomationExecutionEntry!]!
+    exportLeadsCsv: String!
   }
 
   type Mutation {
     signup(name: String!, email: String!, password: String!): AuthPayload!
     login(email: String!, password: String!): AuthPayload!
+    """Rotates access JWT; refresh from HttpOnly cookie or optional body (API clients)."""
+    refreshSession(refreshToken: String): AuthPayload!
+    logout: Boolean!
     requestPasswordReset(email: String!): Boolean!
     resetPassword(token: String!, password: String!): Boolean!
 
@@ -313,5 +337,7 @@ module.exports = gql`
     ): AutomationRule!
 
     runInboundEmailSync: InboundSyncResult!
+
+    importLeadsCsv(csvText: String!): ImportLeadsResult!
   }
 `;

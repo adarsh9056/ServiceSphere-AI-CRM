@@ -11,18 +11,47 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+
   api:
     build:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
+      NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: postgresql://crm:crm123@postgres:5432/crmdb
-      JWT_SECRET: ${JWT_SECRET:-docker-dev-change-me}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-docker-dev-jwt-secret-at-least-32-characters-long}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       PORT: 4000
     ports:
       - '4000:4000'
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ['node', 'worker.js']
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://crm:crm123@postgres:5432/crmdb
+      JWT_SECRET: ${JWT_SECRET:-docker-dev-jwt-secret-at-least-32-characters-long}
+      IMAP_HOST: ${IMAP_HOST:-}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASS: ${IMAP_PASS:-}
+      IMAP_TLS: ${IMAP_TLS:-true}
+      IMAP_SYNC_INTERVAL_MS: ${IMAP_SYNC_INTERVAL_MS:-300000}
     depends_on:
       - postgres
 

@@ -27,6 +27,13 @@ module.exports = defineConfig({
           url: 'http://localhost:4000/health',
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
+          env: {
+            ...process.env,
+            // Playwright-spawned API: skip boot IMAP so lastUid is not advanced before the spec clicks sync.
+            ...(process.env.IMAP_SKIP_BOOT_SYNC === undefined
+              ? { IMAP_SKIP_BOOT_SYNC: '1' }
+              : {}),
+          },
         },
         {
           command: 'npm run dev',
@@ -34,6 +41,11 @@ module.exports = defineConfig({
           url: 'http://localhost:5173',
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
+          env: {
+            ...process.env,
+            VITE_GRAPHQL_URL:
+              process.env.VITE_GRAPHQL_URL || 'http://localhost:4000/graphql',
+          },
         },
       ],
 });

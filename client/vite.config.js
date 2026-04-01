@@ -7,5 +7,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    proxy: {
+      '/graphql': {
+        target: process.env.VITE_PROXY_API || 'http://localhost:4000',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: process.env.VITE_PROXY_API || 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
   },
 })
