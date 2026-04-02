@@ -247,21 +247,34 @@ GitHub Actions in [.github/workflows/ci.yml](.github/workflows/ci.yml) runs:
 
 ## Deployment
 
-### Frontend
+### Render (recommended for this repo)
+
+The root [`render.yaml`](render.yaml) defines **PostgreSQL**, **Redis** (required by the API in production), the **Docker API**, a **static Vite frontend**, and a **Node worker**.
+
+1. Push this repo to GitHub (already set up for [ServiceSphere-AI-CRM](https://github.com/adarsh9056/ServiceSphere-AI-CRM)).
+2. In [Render](https://dashboard.render.com): **New** → **Blueprint** → connect the repo → select branch `main` → **Apply**.
+3. Default URLs are derived from service names in `render.yaml`:
+   - API: `https://servicesphere-ai-crm-api.onrender.com`
+   - Web: `https://servicesphere-ai-crm-web.onrender.com`
+   If Render assigns different hostnames, update **`CLIENT_ORIGIN`**, **`PUBLIC_APP_URL`**, **`PUBLIC_API_URL`** on the API service, set **`VITE_GRAPHQL_URL`** on the static site to `https://<your-api-host>/graphql`, and redeploy the web service.
+4. After the first successful API deploy, open **Shell** on the API service (or run locally against production `DATABASE_URL`) and run: `npx prisma db seed` for demo users and sample data.
+5. Optional: set **`OPENAI_API_KEY`** and **`SMTP_*`** in the API service **Environment** tab for AI drafts and email.
+
+### Frontend (other hosts)
 
 - Vercel or any static host
 - build from `client/`
-- set `VITE_GRAPHQL_URL` to the deployed API
+- set `VITE_GRAPHQL_URL` to the deployed API (`…/graphql`)
 
-### API
+### API (other hosts)
 
-- Render, Railway, Docker host, or EC2
+- Railway, Docker host, or EC2
 - run Prisma migrations before startup
-- set production secrets and integration variables
+- set production secrets (`JWT_SECRET` ≥ 32 chars, `REDIS_URL`, `CLIENT_ORIGIN` HTTPS, etc.)
 
 ### Worker
 
-Run `node worker.js` alongside the API in production.
+Run `node worker.js` alongside the API in production (included as a Render worker in `render.yaml`).
 
 ### EC2
 

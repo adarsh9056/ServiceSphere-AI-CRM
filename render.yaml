@@ -1,0 +1,110 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# After push: Render Dashboard → New → Blueprint → Connect repo → Apply.
+# URLs assume default onrender.com hostnames from the service `name` below.
+# If Render assigns a different URL, update CLIENT_ORIGIN, PUBLIC_APP_URL, PUBLIC_API_URL,
+# and rebuild the static site with the correct VITE_GRAPHQL_URL.
+
+databases:
+  - name: ssaicrm-pg
+    databaseName: servicesphere
+    user: servicesphere
+    plan: free
+    postgresMajorVersion: "16"
+  - name: ssaicrm-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+services:
+  - type: web
+    name: servicesphere-ai-crm-api
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ssaicrm-pg
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: ssaicrm-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN
+        value: https://servicesphere-ai-crm-web.onrender.com
+      - key: PUBLIC_APP_URL
+        value: https://servicesphere-ai-crm-web.onrender.com
+      - key: PUBLIC_API_URL
+        value: https://servicesphere-ai-crm-api.onrender.com
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: LOG_FORMAT
+        value: json
+      - key: LOG_REDACT
+        value: "true"
+      # Optional: set in Dashboard after deploy if you use AI / email / etc.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+
+  - type: web
+    name: servicesphere-ai-crm-web
+    runtime: static
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: cd client && npm ci && npm run build
+    staticPublishPath: client/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_GRAPHQL_URL
+        value: https://servicesphere-ai-crm-api.onrender.com/graphql
+
+  - type: worker
+    name: servicesphere-ai-crm-worker
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: cd server && npm ci && npx prisma generate
+    startCommand: cd server && node worker.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ssaicrm-pg
+          property: connectionString
+      - key: IMAP_HOST
+        sync: false
+      - key: IMAP_PORT
+        sync: false
+      - key: IMAP_USER
+        sync: false
+      - key: IMAP_PASS
+        sync: false
+      - key: IMAP_TLS
+        sync: false
