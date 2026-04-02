@@ -37,9 +37,22 @@ jobs:
         with:
           node-version: '20'
 
+      - name: OS packages (Prisma OpenSSL / native builds)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssl libssl-dev build-essential python3
+
       - name: Install server dependencies
         working-directory: server
-        run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund --ignore-scripts
+
+      - name: Prisma generate
+        working-directory: server
+        run: npx prisma generate
+
+      - name: Native module rebuild (bcrypt, etc.)
+        working-directory: server
+        run: npm rebuild
 
       - name: Prisma migrate (server)
         working-directory: server
@@ -97,9 +110,17 @@ jobs:
         with:
           node-version: '20'
 
+      - name: OS packages (Prisma OpenSSL / native builds)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssl libssl-dev build-essential python3
+
       - name: Install server deps
         working-directory: server
-        run: npm install --no-audit --no-fund
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npx prisma generate
+          npm rebuild
 
       - name: Install client deps
         working-directory: client
