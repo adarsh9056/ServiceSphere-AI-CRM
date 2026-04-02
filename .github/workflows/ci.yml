@@ -114,7 +114,8 @@ jobs:
         run: |
           echo "DATABASE_URL=${DATABASE_URL}" > server/.env
           echo "JWT_SECRET=${JWT_SECRET}" >> server/.env
-          echo "CLIENT_ORIGIN=http://localhost:5173" >> server/.env
+          # Must match Playwright baseURL / Vite dev URL (127.0.0.1 in CI — see playwright.config.js).
+          echo "CLIENT_ORIGIN=http://127.0.0.1:5173" >> server/.env
 
       - name: Migrate & seed
         working-directory: server
