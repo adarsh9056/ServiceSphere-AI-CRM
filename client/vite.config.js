@@ -6,6 +6,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    // Listen on all interfaces so CI (Playwright using 127.0.0.1) can reach the dev server.
+    host: true,
     port: 5173,
     proxy: {
       '/graphql': {
