@@ -251,8 +251,13 @@ GitHub Actions in [.github/workflows/ci.yml](.github/workflows/ci.yml) runs:
 
 The root [`render.yaml`](render.yaml) defines **PostgreSQL**, **Redis** (required by the API in production), the **Docker API**, a **static Vite frontend**, and a **Node worker**.
 
+**Fastest path (log in with GitHub when prompted):**  
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/adarsh9056/ServiceSphere-AI-CRM)
+
+Or open: `https://render.com/deploy?repo=https://github.com/adarsh9056/ServiceSphere-AI-CRM`
+
 1. Push this repo to GitHub (already set up for [ServiceSphere-AI-CRM](https://github.com/adarsh9056/ServiceSphere-AI-CRM)).
-2. In [Render](https://dashboard.render.com): **New** → **Blueprint** → connect the repo → select branch `main` → **Apply**.
+2. Use the button above, or in [Render](https://dashboard.render.com): **New** → **Blueprint** → connect the repo → select branch `main` → **Apply**.
 3. Default URLs are derived from service names in `render.yaml`:
    - API: `https://servicesphere-ai-crm-api.onrender.com`
    - Web: `https://servicesphere-ai-crm-web.onrender.com`
