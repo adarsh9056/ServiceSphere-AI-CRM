@@ -240,6 +240,14 @@ module.exports = gql`
     rule: AutomationRule
   }
 
+  type SendEmailResult {
+    email: EmailRecord!
+    """True when SMTP is not configured; message is still logged on the lead."""
+    deliverySkipped: Boolean!
+    """Provider message id when sent successfully."""
+    messageId: String
+  }
+
   type AIReplyResult {
     body: String!
   }
@@ -308,7 +316,7 @@ module.exports = gql`
     createDeal(leadId: ID!, stage: DealStage, value: String, expectedCloseDate: String): Deal!
     moveDeal(id: ID!, stage: DealStage!, reason: String): Deal!
 
-    sendEmail(leadId: ID!, to: String!, subject: String!, body: String!): EmailRecord!
+    sendEmail(leadId: ID!, to: String!, subject: String!, body: String!): SendEmailResult!
     generateAIReply(leadId: ID!): AIReplyResult!
     analyzeEmailSentiment(leadId: ID!, emailBody: String!): SentimentResult!
 

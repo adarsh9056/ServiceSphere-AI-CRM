@@ -143,14 +143,26 @@ export default function LeadDetail() {
 
   async function onSendApproved(e) {
     e.preventDefault()
-    await sendEmail({
-      variables: {
-        leadId: id,
-        to: composeTo,
-        subject: composeSubject,
-        body: composeBody,
-      },
-    })
+    try {
+      const { data } = await sendEmail({
+        variables: {
+          leadId: id,
+          to: composeTo,
+          subject: composeSubject,
+          body: composeBody,
+        },
+      })
+      if (data?.sendEmail?.deliverySkipped) {
+        window.alert(
+          'Email was saved on this lead but not delivered — SMTP is not configured.\n\n' +
+            'Edit server/.env and set SMTP_HOST, SMTP_USER, and SMTP_PASS (and usually SMTP_FROM). ' +
+            'Restart the API after saving .env.',
+        )
+      }
+    } catch (err) {
+      window.alert(err.message || 'Send failed')
+      return
+    }
     refetch()
   }
 

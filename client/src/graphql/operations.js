@@ -174,7 +174,11 @@ export const GET_ACTIVITIES = gql`
 export const SEND_EMAIL = gql`
   mutation SendEmail($leadId: ID!, $to: String!, $subject: String!, $body: String!) {
     sendEmail(leadId: $leadId, to: $to, subject: $subject, body: $body) {
-      id
+      deliverySkipped
+      messageId
+      email {
+        id
+      }
     }
   }
 `

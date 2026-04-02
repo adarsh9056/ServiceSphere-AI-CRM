@@ -664,7 +664,7 @@ const resolvers = {
         err.extensions = { code: 'FORBIDDEN' };
         throw err;
       }
-      await sendMail({ to, subject, text: body });
+      const mailResult = await sendMail({ to, subject, text: body });
       const row = await prisma.email.create({
         data: {
           leadId,
@@ -679,7 +679,11 @@ const resolvers = {
         where: { id: leadId },
         data: { openedEmail: true },
       });
-      return row;
+      return {
+        email: row,
+        deliverySkipped: !!mailResult.skipped,
+        messageId: mailResult.messageId || null,
+      };
     },
 
     generateAIReply: async (_, { leadId }, { user }) => {

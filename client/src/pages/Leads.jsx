@@ -136,9 +136,22 @@ export default function Leads() {
     const to = document.getElementById('email-to').value
     const subject = document.getElementById('email-subject').value
     const body = document.getElementById('email-body').value
-    await sendEmail({
-      variables: { leadId: composeLead.id, to, subject, body },
-    })
+    try {
+      const { data } = await sendEmail({
+        variables: { leadId: composeLead.id, to, subject, body },
+      })
+      if (data?.sendEmail?.deliverySkipped) {
+        window.alert(
+          'Email was saved on this lead but not delivered — SMTP is not configured.\n\n' +
+            'Edit server/.env and set SMTP_HOST, SMTP_USER, and SMTP_PASS (and usually SMTP_FROM). ' +
+            'Example Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, use an App Password for SMTP_PASS.\n\n' +
+            'Restart the API after saving .env.',
+        )
+      }
+    } catch (err) {
+      window.alert(err.message || 'Send failed')
+      return
+    }
     setComposeLead(null)
     refetch()
   }
