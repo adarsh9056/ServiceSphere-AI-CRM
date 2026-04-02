@@ -12,7 +12,6 @@ databases:
     postgresMajorVersion: "16"
   - name: ssaicrm-redis
     plan: free
-    maxmemoryPolicy: allkeys-lru
 
 services:
   - type: web
