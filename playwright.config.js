@@ -3,6 +3,9 @@ const { defineConfig } = require('@playwright/test');
 const path = require('path');
 
 const repoRoot = __dirname;
+// In GitHub Actions, localhost can resolve to IPv6 while services listen on IPv4-mapped ports.
+const loopback = process.env.CI ? '127.0.0.1' : 'localhost';
+const defaultApiOrigin = `http://${loopback}:4000`;
 
 module.exports = defineConfig({
   testDir: path.join(repoRoot, 'e2e'),
@@ -14,7 +17,9 @@ module.exports = defineConfig({
   globalSetup: path.join(repoRoot, 'e2e', 'global-setup.cjs'),
   timeout: 120_000,
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
+    baseURL:
+      process.env.PLAYWRIGHT_BASE_URL ||
+      (process.env.CI ? 'http://127.0.0.1:5173' : 'http://localhost:5173'),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -24,7 +29,7 @@ module.exports = defineConfig({
         {
           command: 'npm run dev',
           cwd: path.join(repoRoot, 'server'),
-          url: 'http://localhost:4000/health',
+          url: `${defaultApiOrigin}/health`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
           env: {
@@ -38,13 +43,13 @@ module.exports = defineConfig({
         {
           command: 'npm run dev',
           cwd: path.join(repoRoot, 'client'),
-          url: 'http://localhost:5173',
+          url: `http://${loopback}:5173`,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
           env: {
             ...process.env,
             VITE_GRAPHQL_URL:
-              process.env.VITE_GRAPHQL_URL || 'http://localhost:4000/graphql',
+              process.env.VITE_GRAPHQL_URL || `${defaultApiOrigin}/graphql`,
           },
         },
       ],

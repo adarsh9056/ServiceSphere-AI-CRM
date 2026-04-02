@@ -26,7 +26,8 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/crm_test
+      # Use 127.0.0.1 (not localhost) so Node resolves to IPv4; matches the Postgres service port mapping.
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/crm_test?sslmode=disable
       JWT_SECRET: ci-test-secret-not-for-production-use-32chars
 
     steps:
@@ -41,9 +42,8 @@ jobs:
       - name: Install & test server
         working-directory: server
         run: |
-          npm ci 2>/dev/null || npm install
+          npm ci
           npx prisma migrate deploy
-          npx prisma generate
           npm test
 
   client:
@@ -82,9 +82,9 @@ jobs:
           --health-retries 10
 
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/crm_e2e
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/crm_e2e?sslmode=disable
       JWT_SECRET: ci-e2e-jwt-secret-at-least-32-characters-long
-      VITE_GRAPHQL_URL: http://localhost:4000/graphql
+      VITE_GRAPHQL_URL: http://127.0.0.1:4000/graphql
       CI: true
 
     steps:
@@ -98,14 +98,14 @@ jobs:
 
       - name: Install server deps
         working-directory: server
-        run: npm ci 2>/dev/null || npm install
+        run: npm ci
 
       - name: Install client deps
         working-directory: client
         run: npm ci
 
       - name: Install Playwright (root)
-        run: npm ci 2>/dev/null || npm install
+        run: npm ci
 
       - name: Write server/.env for seed & API
         run: |

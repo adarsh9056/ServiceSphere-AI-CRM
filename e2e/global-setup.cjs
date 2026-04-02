@@ -8,9 +8,18 @@ const { spawnSync } = require('child_process');
 module.exports = async function globalSetup() {
   const serverEnvPath = path.join(__dirname, '..', 'server', '.env');
   if (!fs.existsSync(serverEnvPath)) {
-    throw new Error(
-      `Missing server/.env — copy server/.env.example and set DATABASE_URL (see README).`,
-    );
+    if (process.env.DATABASE_URL) {
+      const lines = [
+        `DATABASE_URL=${process.env.DATABASE_URL}`,
+        `JWT_SECRET=${process.env.JWT_SECRET || 'ci-e2e-placeholder-not-for-production-32chars'}`,
+        `CLIENT_ORIGIN=${process.env.CLIENT_ORIGIN || 'http://localhost:5173'}`,
+      ];
+      fs.writeFileSync(serverEnvPath, `${lines.join('\n')}\n`, 'utf8');
+    } else {
+      throw new Error(
+        `Missing server/.env — copy server/.env.example and set DATABASE_URL (see README), or set DATABASE_URL in the environment (CI).`,
+      );
+    }
   }
 
   const script = path.join(__dirname, 'scripts', 'seed-inbound-email.cjs');
