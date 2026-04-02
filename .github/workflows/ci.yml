@@ -36,15 +36,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: server/package-lock.json
 
-      - name: Install & test server
+      - name: Install server dependencies
         working-directory: server
-        run: |
-          npm ci
-          npx prisma migrate deploy
-          npm test
+        run: npm install --no-audit --no-fund
+
+      - name: Prisma migrate (server)
+        working-directory: server
+        run: npx prisma migrate deploy
+
+      - name: Test server
+        working-directory: server
+        run: npm test
 
   client:
     runs-on: ubuntu-latest
@@ -93,12 +96,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
-          cache-dependency-path: package-lock.json
 
       - name: Install server deps
         working-directory: server
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install client deps
         working-directory: client
